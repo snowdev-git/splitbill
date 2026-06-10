@@ -1,0 +1,13 @@
+# Ambientes virtuais e Caches
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+
+# Arquivos de dados confidenciais e Banco de Dados Local
+*.pdf
+faturas.db
+
+# Configurações do VS Code
+.vscode/
