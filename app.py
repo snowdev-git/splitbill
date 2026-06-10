@@ -14,7 +14,7 @@ st.markdown("""
     #MainMenu {visibility: hidden !important;}
     header {visibility: hidden !important;}
     footer {visibility: hidden !important;}
-    [data-testid="stToolbar"] {display: none !important;} /* Oculta a barra de ferramentas nativa (Deploy) */
+    [data-testid="stToolbar"] {display: none !important;}
     a.header-anchor { display: none !important; }
     section[data-testid="stSidebar"] { width: 250px !important; min-width: 250px !important; max-width: 250px !important; }
     section[data-testid="stSidebar"] > div { overflow-y: hidden !important; }
@@ -22,7 +22,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. DESCOBERTA AUTOMÁTICA DE IP LOCAL ---
+# --- 2. DESCOBERTA AUTOMÁTICA DE IP ---
 @st.cache_data
 def obter_ip_maquina():
     try:
@@ -37,7 +37,7 @@ def obter_ip_maquina():
 IP_ATUAL = obter_ip_maquina()
 PORTA = "8501" 
 
-# --- 3. BANCO DE DADOS (SQLite) ---
+# --- 3. BANCO DE DADOS ---
 DB_NAME = "faturas.db"
 
 def init_db():
@@ -123,8 +123,7 @@ def renderizar_resumo_fechamento(df_editado):
         
         resumo = pd.DataFrame(registros).groupby("Pessoa")["Valor"].sum().reset_index()
         c1, c2 = st.columns([1, 1])
-        # Corrigido o aviso do terminal atualizando o parâmetro para width="stretch"
-        c1.dataframe(resumo.style.format({"Valor": "R$ {:.2f}"}), width="stretch", hide_index=True)
+        c1.dataframe(resumo.style.format({"Valor": "R$ {:.2f}"}), width=400, hide_index=True)
         c2.bar_chart(resumo.set_index("Pessoa"), y="Valor")
     else:
         st.warning("Nenhum nome atribuído nesta fatura ainda.")
@@ -142,7 +141,6 @@ if fatura_atual_id:
         st.error("⚠️ Link inválido ou fatura não encontrada.")
     else:
         st.markdown("##### Preencha seu nome na coluna 'Dono da Compra' e clique em Salvar.")
-        # Corrigido o aviso do terminal atualizando o parâmetro para width="stretch"
         df_editado = st.data_editor(df_banco, num_rows="fixed", width="stretch", hide_index=True, disabled=["id", "Data", "Descrição", "Valor (R$)"])
         
         if st.button("💾 Salvar Minhas Alterações", type="primary"):
@@ -161,7 +159,6 @@ else:
         
         SENHA_MEU_SISTEMA = "admin123" 
         senha_admin_digitada = st.text_input("Senha do Sistema", type="password")
-        
         st.write("---")
         st.caption("🚀 **Leonardo Araújo** | 📅 **2026**")
 
@@ -175,55 +172,47 @@ else:
             arquivo_fatura = st.file_uploader("Selecione o arquivo PDF", type=["pdf"])
             
             if arquivo_fatura is not None:
-                dados = extrair_fatura(arquivo_fatura, senha_pdf)
-                if dados == "erro_senha":
-                    st.error("🔒 Senha do PDF incorreta.")
-                elif isinstance(dados, list) and len(dados) > 0:
-                    df = pd.DataFrame(dados)
-                    total_fatura = df['Valor (R$)'].sum()
-                    st.success(f"PDF processado com sucesso! Total: R$ {total_fatura:,.2f}")
-                    
-                    if st.button("🚀 Salvar no Banco e Gerar Link", type="primary"):
-                        if nome_fatura.strip() == "":
-                            st.error("⚠️ Por favor, digite um nome para a fatura antes de gerar o link.")
-                        else:
-                            novo_id = str(uuid.uuid4())[:8]
-                            salvar_nova_fatura(novo_id, nome_fatura.strip(), dados, total_fatura)
-                            
-                            link = f"http://{IP_ATUAL}:{PORTA}/?id={novo_id}"
-                            st.info("Fatura salva de forma definitiva! Envie este link para os usuários preencherem:")
-                            st.code(link, language="text")
+                # Validação de formato (embora o file_uploader já restrinja)
+                if not arquivo_fatura.name.lower().endswith('.pdf'):
+                    st.error("⚠️ Formato inválido! Por favor, suba apenas arquivos PDF.")
                 else:
-                    st.error("Nenhuma transação encontrada no arquivo.")
+                    dados = extrair_fatura(arquivo_fatura, senha_pdf)
+                    if dados == "erro_senha":
+                        st.error("🔒 Senha do PDF incorreta.")
+                    elif isinstance(dados, list) and len(dados) > 0:
+                        df = pd.DataFrame(dados)
+                        total_fatura = df['Valor (R$)'].sum()
+                        st.success(f"PDF processado com sucesso! Total: R$ {total_fatura:,.2f}")
+                        
+                        if st.button("🚀 Salvar no Banco e Gerar Link", type="primary"):
+                            if nome_fatura.strip() == "":
+                                st.error("⚠️ Digite um nome para a fatura.")
+                            else:
+                                novo_id = str(uuid.uuid4())[:8]
+                                salvar_nova_fatura(novo_id, nome_fatura.strip(), dados, total_fatura)
+                                link = f"http://{IP_ATUAL}:{PORTA}/?id={novo_id}"
+                                st.info("Link gerado:")
+                                st.code(link, language="text")
+                    else:
+                        st.error("Nenhuma transação encontrada no arquivo.")
                     
         with aba_historico:
             st.markdown("### Gerenciar Faturas Armazenadas")
             dict_faturas = listar_faturas_salvas()
-            
             if not dict_faturas:
-                st.info("Nenhuma fatura foi salva no banco de dados ainda.")
+                st.info("Nenhuma fatura salva.")
             else:
-                fatura_selecionada_nome = st.selectbox("Escolha a fatura que deseja inspecionar:", list(dict_faturas.keys()))
+                fatura_selecionada_nome = st.selectbox("Escolha a fatura:", list(dict_faturas.keys()))
                 id_selecionado = dict_faturas[fatura_selecionada_nome]
                 df_historico = carregar_itens(id_selecionado)
                 
-                st.write(f"Mostrando dados de: **{fatura_selecionada_nome}**")
-                # Corrigido o aviso do terminal atualizando o parâmetro para width="stretch"
                 df_hist_editado = st.data_editor(df_historico, num_rows="fixed", width="stretch", hide_index=True, disabled=["id", "Data", "Descrição", "Valor (R$)"])
-                
-                c_salvar, c_link = st.columns([1, 3])
-                if c_salvar.button("💾 Atualizar Banco", key="btn_admin_save"):
+                if st.button("💾 Atualizar Banco", key="btn_admin_save"):
                     atualizar_banco(id_selecionado, df_hist_editado)
-                    st.success("Banco de dados atualizado pelo administrador!")
+                    st.success("Banco atualizado!")
                     st.rerun()
-                    
-                c_link.text(f"🔗 Link desta fatura: http://{IP_ATUAL}:{PORTA}/?id={id_selecionado}")
-                
-                st.divider()
-                st.markdown("#### 📊 Divisão de Gastos Atual")
+                st.text(f"🔗 Link: http://{IP_ATUAL}:{PORTA}/?id={id_selecionado}")
                 renderizar_resumo_fechamento(df_hist_editado)
                 
     elif senha_admin_digitada != "":
-        st.error("Senha de acesso administrativa incorreta.")
-    else:
-        st.info("💡 Por favor, insira a Senha do Sistema na barra lateral à esquerda para acessar a Área Administrativa.")
+        st.error("Senha incorreta.")
